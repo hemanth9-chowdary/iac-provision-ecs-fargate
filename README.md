@@ -24,8 +24,8 @@ This setup creates the following resources:
 
 ### Get Started building your own infrastructure
 
-1.Login to the Terraform Cloud
-2.Open the workspace if already configured , if not please create a workspace and integrate with this repo onGitHub 
-3.Configure the Variables - please check variables.tf file the list of variables and it's default values 
-4.Configure AWS Key and secrets as secret variables 
-5. Run the plan which will create entire infrastructure on AWS
+- Login to the Terraform Cloud
+- Open the workspace if already configured , if not please create a workspace and integrate with this repo onGitHub 
+- Configure the Variables - please check variables.tf file the list of variables and it's default values 
+- Configure AWS Key and secrets as secret variables 
+- Run the plan which will create entire infrastructure on AWS
