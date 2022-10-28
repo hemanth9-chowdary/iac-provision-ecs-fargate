@@ -50,7 +50,7 @@ resource "aws_internet_gateway" "main" {
 }
 
 resource "aws_eip" "nat" {
-  count = length(aws_subnet.private)
+  count = 1
   vpc   = true
 
   tags = {
@@ -60,8 +60,8 @@ resource "aws_eip" "nat" {
 }
 
 resource "aws_nat_gateway" "main" {
-  count         = length(aws_subnet.private)
-  allocation_id = element(aws_eip.nat.*.id, count.index)
+  count         = length(var.private_subnets)
+  allocation_id = aws_eip.nat.id
   subnet_id     = element(aws_subnet.public.*.id, count.index)
   depends_on    = [aws_internet_gateway.main]
 
@@ -80,9 +80,13 @@ resource "aws_route_table" "public" {
   }
 }
 
+resource "aws_route" "public" {
+  route_table_id         = aws_route_table.public.id
+  destination_cidr_block = "0.0.0.0/0"
+  gateway_id             = aws_internet_gateway.main.id
+}
 
 resource "aws_route_table" "private" {
-  count  = length(aws_subnet.private)
   vpc_id = aws_vpc.main.id
 
   tags = {
@@ -91,11 +95,17 @@ resource "aws_route_table" "private" {
   }
 }
 
+resource "aws_route" "private" {
+  count                  = length(compact(var.private_subnets))
+  route_table_id         = aws_route_table.private.id
+  destination_cidr_block = "0.0.0.0/0"
+  nat_gateway_id         = aws_nat_gateway.main.id
+}
 
 resource "aws_route_table_association" "private" {
   count          = length(aws_subnet.private)
   subnet_id      = element(aws_subnet.private.*.id, count.index)
-  route_table_id = element(aws_route_table.private.*.id, count.index)
+  route_table_id = aws_route_table.private.id
 }
 
 resource "aws_route_table_association" "public" {
@@ -194,7 +204,6 @@ resource "aws_ecr_lifecycle_policy" "main" {
 
 resource "aws_lb" "main" {
   name               = "${var.name}-alb-${var.environment}"
-  internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
   subnets            = [for subnet in aws_subnet.public : subnet.id]
@@ -262,27 +271,6 @@ resource "aws_iam_role" "ecs_task_execution_role" {
 EOF
 }
 
-resource "aws_iam_role" "ecs_task_role" {
-  name = "${var.name}-ecsTaskRole"
-
-  assume_role_policy = <<EOF
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Action": "sts:AssumeRole",
-      "Principal": {
-        "Service": "ecs-tasks.amazonaws.com"
-      },
-      "Effect": "Allow",
-      "Sid": ""
-    }
-  ]
-}
-EOF
-}
-
-
 resource "aws_iam_role_policy_attachment" "ecs-task-execution-role-policy-attachment" {
   role       = aws_iam_role.ecs_task_execution_role.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
@@ -305,7 +293,6 @@ resource "aws_ecs_task_definition" "main" {
   cpu                      = var.container_cpu
   memory                   = var.container_memory
   execution_role_arn       = aws_iam_role.ecs_task_execution_role.arn
-  task_role_arn            = aws_iam_role.ecs_task_role.arn
   container_definitions = jsonencode([
     {
       name      = "${var.name}-container-${var.environment}"
@@ -369,6 +356,7 @@ resource "aws_ecs_service" "main" {
   lifecycle {
     ignore_changes = [task_definition, desired_count]
   }
+  depends_on = [aws_lb_target_group.main.arn]
 }
 
 resource "aws_appautoscaling_target" "ecs_target" {
