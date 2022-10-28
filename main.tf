@@ -1,6 +1,5 @@
 provider "aws" {
   region  = var.aws-region
-  version = ">= 3.73"
 }
 
 
@@ -50,23 +49,21 @@ resource "aws_internet_gateway" "main" {
 }
 
 resource "aws_eip" "nat" {
-  count = 1
   vpc   = true
 
   tags = {
-    Name        = "${var.name}-eip-${var.environment}-${format("%03d", count.index + 1)}"
+    Name        = "${var.name}-eip-${var.environment}"
     Environment = var.environment
   }
 }
 
 resource "aws_nat_gateway" "main" {
-  count         = length(var.private_subnets)
   allocation_id = aws_eip.nat.id
-  subnet_id     = element(aws_subnet.public.*.id, count.index)
+  subnet_id     = aws_subnet.public.1.id
   depends_on    = [aws_internet_gateway.main]
 
   tags = {
-    Name        = "${var.name}-nat-${var.environment}-${format("%03d", count.index + 1)}"
+    Name        = "${var.name}-nat-${var.environment}"
     Environment = var.environment
   }
 }
@@ -90,7 +87,7 @@ resource "aws_route_table" "private" {
   vpc_id = aws_vpc.main.id
 
   tags = {
-    Name        = "${var.name}-routing-table-private-${format("%03d", count.index + 1)}"
+    Name        = "${var.name}-routing-table-private"
     Environment = var.environment
   }
 }
@@ -356,7 +353,6 @@ resource "aws_ecs_service" "main" {
   lifecycle {
     ignore_changes = [task_definition, desired_count]
   }
-  depends_on = [aws_lb_target_group.main.arn]
 }
 
 resource "aws_appautoscaling_target" "ecs_target" {
